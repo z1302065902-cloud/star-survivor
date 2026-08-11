@@ -1,0 +1,9 @@
+node_modules
+dist
+dist-itch
+logs
+*.log
+.DS_Store
+.vercel
+.env
+.env.local
