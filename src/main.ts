@@ -138,8 +138,8 @@ function bindUI() {
   window.addEventListener('keydown', (e) => {
     if (!game) return
     const k = e.key.toLowerCase()
-    if (k === 'w' || k === 'arrowup') game.setMove(0, 1)
-    if (k === 's' || k === 'arrowdown') game.setMove(0, -1)
+    if (k === 'w' || k === 'arrowup') game.setMove(0, -1)
+    if (k === 's' || k === 'arrowdown') game.setMove(0, 1)
     if (k === 'a' || k === 'arrowleft') game.setMove(-1, 0)
     if (k === 'd' || k === 'arrowright') game.setMove(1, 0)
   })
