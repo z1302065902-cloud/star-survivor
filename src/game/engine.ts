@@ -5,6 +5,7 @@ import {
   WEAPONS, PASSIVES, ENEMIES, TRIAL_MINUTES, FULL_MINUTES,
   type WeaponId, type PassiveId, type EnemyId, type CharDef, type UpgradeOption,
 } from './data'
+import { buildHeroShip, enemyModelName, spawnModel, preloadModels } from './assets'
 
 export interface GameEvents {
   onLevelUp: (options: UpgradeOption[]) => void
@@ -130,6 +131,8 @@ export class SurvivorGame {
     dir.position.set(5, 15, 5)
     this.scene.add(dir)
 
+    // 预加载 UFO 模型（后台拉取，敌人生成时立即可用）
+    preloadModels()
     // 星空地面
     this.buildGround()
     // 玩家
@@ -163,38 +166,35 @@ export class SurvivorGame {
   }
 
   private buildPlayer(color: number): THREE.Object3D {
-    const g = new THREE.Group()
-    const body = new THREE.Mesh(
-      new THREE.SphereGeometry(0.5, 12, 12),
-      new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.3 }),
-    )
-    g.add(body)
-    // 朝向指示
-    const nose = new THREE.Mesh(
-      new THREE.ConeGeometry(0.2, 0.5, 8),
-      new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.5 }),
-    )
-    nose.rotation.x = Math.PI / 2
-    nose.position.z = 0.55
-    g.add(nose)
-    g.position.set(0, 0.3, 0)
-    return g
+    return buildHeroShip(color)
   }
 
   private enemyMesh(id: EnemyId): THREE.Object3D {
     const def = ENEMIES[id]
     const g = new THREE.Group()
-    const body = new THREE.Mesh(
-      new THREE.SphereGeometry(def.radius, 8, 8),
-      new THREE.MeshStandardMaterial({ color: def.color, emissive: def.color, emissiveIntensity: 0.2 }),
+    // 用真实 UFO 模型（异步加载，先放占位环避免空）
+    const placeholder = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(def.radius, 0),
+      new THREE.MeshStandardMaterial({ color: def.color, emissive: def.color, emissiveIntensity: 0.3 }),
     )
-    g.add(body)
+    g.add(placeholder)
+    void spawnModel(enemyModelName(id), def.color).then((m) => {
+      if (!m) return
+      // 移除占位
+      placeholder.removeFromParent()
+      const s = (def.radius / 0.5) * 1.4
+      m.scale.setScalar(s)
+      m.position.y = 0.2
+      g.add(m)
+      g.userData.model = m
+    })
     if (id === 'boss') {
       const ring = new THREE.Mesh(
         new THREE.TorusGeometry(def.radius * 1.4, 0.1, 6, 16),
         new THREE.MeshBasicMaterial({ color: 0xff3b6b }),
       )
       ring.rotation.x = Math.PI / 2
+      ring.position.y = 0.3
       g.add(ring)
     }
     return g
@@ -404,6 +404,8 @@ export class SurvivorGame {
         en.pos.y += (dy / d) * ENEMIES[en.def].speed * dt
       }
       en.mesh.position.set(en.pos.x, 0.4, en.pos.y)
+      // 面向玩家（UFO 的 -Z 朝向移动方向）
+      en.mesh.lookAt(this.playerPos.x, 0.4, this.playerPos.y)
       // 接触伤害
       if (d < 0.9 + en.radius) {
         const dmg = Math.max(1, Math.round(en.damage * (1 - this.statArmor)))
