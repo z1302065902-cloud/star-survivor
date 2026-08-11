@@ -6,6 +6,8 @@ import {
   type WeaponId, type PassiveId, type EnemyId, type CharDef, type UpgradeOption,
 } from './data'
 import { buildHeroShip, enemyModelName, spawnModel, preloadModels } from './assets'
+import { isWeaponUnlocked } from './paid'
+import type { SfxKind } from './audio'
 
 export interface GameEvents {
   onLevelUp: (options: UpgradeOption[]) => void
@@ -14,6 +16,8 @@ export interface GameEvents {
   onTimer: (sec: number) => void
   onGameOver: (sec: number, kills: number, won: boolean) => void
   onCoins: (coins: number) => void
+  onTrialEnd: () => void
+  onSfx: (kind: SfxKind) => void
 }
 
 interface Enemy {
@@ -26,6 +30,7 @@ interface Enemy {
   damage: number
   xp: number
   hitFlash: number
+  hitCd: number
   dead: boolean
 }
 
@@ -43,6 +48,7 @@ interface Projectile {
   damage: number
   life: number
   kind: 'star' | 'nova' | 'comet'
+  tracking: boolean
   dead: boolean
 }
 
@@ -92,6 +98,7 @@ export class SurvivorGame {
   timer = 0
   spawnTimer = 0
   spawnCount = 0
+  lastBossAt = 0
   gameOver = false
   won = false
 
@@ -324,11 +331,12 @@ export class SurvivorGame {
   // ===== 升级系统 =====
   private gainXp(n: number) {
     if (this.gameOver) return
-    this.xp += n
+    this.xp += n * (1 + this.statCrystal)
     const need = this.xpNeed()
     while (this.xp >= need) {
       this.xp -= need
       this.level++
+      this.events.onSfx('levelup')
       const opts = this.rollUpgrades()
       this.levelQueue.push(...opts)
       if (this.levelQueue.length === 1) this.events.onLevelUp(this.levelQueue)
@@ -344,8 +352,8 @@ export class SurvivorGame {
     const opts: UpgradeOption[] = []
     // 新武器（最多6种）
     const ownedWeapons = Array.from(this.weapons.keys())
-    if (ownedWeapons.length < 6) {
-      const avail = Object.values(WEAPONS).filter(w => !ownedWeapons.includes(w.id))
+    if (ownedWeapons.length < Object.values(WEAPONS).length) {
+      const avail = Object.values(WEAPONS).filter(w => !ownedWeapons.includes(w.id) && isWeaponUnlocked(w.id))
       if (avail.length) {
         const w = avail[Math.floor(Math.random() * avail.length)]
         opts.push({ type: 'weapon', id: w.id, name: `新武器：${w.name}`, desc: w.desc, color: w.color })
@@ -411,8 +419,11 @@ export class SurvivorGame {
     else if (t < 0.6) id = Math.random() < 0.5 ? 'imp' : 'brute'
     else if (t < 0.8) id = Math.random() < 0.5 ? 'phantom' : 'imp'
     else id = 'brute'
-    // Boss 每 60 秒
-    if (Math.floor(this.elapsed / 60) > Math.floor((this.elapsed - 1) / 60)) id = 'boss'
+    // Boss 每 60 秒（用上次刷Boss时间判断，避免开局 elapsed-1 为负导致首帧刷Boss）
+    if (this.elapsed - this.lastBossAt >= 60) {
+      this.lastBossAt = this.elapsed
+      id = 'boss'
+    }
     const def = ENEMIES[id]
     // 从屏幕边缘生成
     const angle = Math.random() * Math.PI * 2
@@ -424,7 +435,7 @@ export class SurvivorGame {
     const mesh = this.enemyMesh(id)
     mesh.position.set(pos.x, 0.4, pos.y)
     this.group.add(mesh)
-    this.enemies.push({ def: id, hp, maxHp: hp, mesh, pos, radius: def.radius, damage: def.damage, xp: def.xp, hitFlash: 0, dead: false })
+    this.enemies.push({ def: id, hp, maxHp: hp, mesh, pos, radius: def.radius, damage: def.damage, xp: def.xp, hitFlash: 0, hitCd: 0, dead: false })
   }
 
   // ===== 更新 =====
@@ -452,6 +463,12 @@ export class SurvivorGame {
       // 朝向
       this.playerMesh.lookAt(this.playerPos.x, 0.3, this.playerPos.y)
     }
+    // 边界限制：玩家不能飞出屏幕
+    // 用相机实际视野做矩形边界（贴合屏幕形状，任何宽高比都正确），留 1.0 边距
+    const maxX = this.camera.right - 1
+    const maxY = this.camera.top - 1
+    this.playerPos.x = Math.max(-maxX, Math.min(maxX, this.playerPos.x))
+    this.playerPos.y = Math.max(-maxY, Math.min(maxY, this.playerPos.y))
     this.playerMesh.position.set(this.playerPos.x, 0.3, this.playerPos.y)
 
     // 再生
@@ -482,13 +499,15 @@ export class SurvivorGame {
       en.mesh.position.set(en.pos.x, 0.4, en.pos.y)
       // 面向玩家（UFO 的 -Z 朝向移动方向）
       en.mesh.lookAt(this.playerPos.x, 0.4, this.playerPos.y)
-      // 接触伤害
-      if (d < 0.9 + en.radius) {
+      // 接触伤害（带 0.8s 间隔，避免贴脸每帧掉血）
+      if (d < 0.9 + en.radius && en.hitCd <= 0) {
         const dmg = Math.max(1, Math.round(en.damage * (1 - this.statArmor)))
         this.damagePlayer(dmg)
+        en.hitCd = 0.8
       }
       // 受击闪白
       if (en.hitFlash > 0) en.hitFlash -= dt
+      if (en.hitCd > 0) en.hitCd -= dt
     }
     this.enemies = this.enemies.filter(e => !e.dead)
 
@@ -497,6 +516,21 @@ export class SurvivorGame {
 
     // 弹体更新
     for (const pr of this.projectiles) {
+      // 追踪弹：持续转向最近敌人
+      if (pr.tracking) {
+        let best: Enemy | null = null
+        let bd = Infinity
+        for (const en of this.enemies) {
+          if (en.dead) continue
+          const d = en.pos.distanceTo(pr.pos)
+          if (d < bd) { bd = d; best = en }
+        }
+        if (best) {
+          const spd = pr.vel.length()
+          const want = best.pos.clone().sub(pr.pos).normalize().multiplyScalar(spd)
+          pr.vel.lerp(want, Math.min(1, dt * 3)).normalize().multiplyScalar(spd)
+        }
+      }
       pr.pos.add(pr.vel.clone().multiplyScalar(dt))
       pr.mesh.position.set(pr.pos.x, 0.6, pr.pos.y)
       pr.life -= dt
@@ -565,6 +599,7 @@ export class SurvivorGame {
       }
       if (d < 0.8) {
         pk.mesh.visible = false
+        this.events.onSfx('pickup')
         if (pk.kind === 'xp') this.gainXp(pk.value)
         else { this.coins += pk.value; this.events.onCoins(this.coins) }
         pk.mesh.removeFromParent()
@@ -580,8 +615,14 @@ export class SurvivorGame {
     const target = this.isFull ? FULL_MINUTES : TRIAL_MINUTES
     if (this.timer >= target * 60 && !this.gameOver) {
       this.gameOver = true
-      this.won = true
-      this.events.onGameOver(Math.round(this.timer), this.kills, true)
+      if (this.isFull) {
+        this.won = true
+        this.events.onGameOver(Math.round(this.timer), this.kills, true)
+      } else {
+        // 试玩超时 → 付费墙（不算胜利，引导购买）
+        this.won = false
+        this.events.onTrialEnd()
+      }
     }
     this.events.onTimer(Math.floor(this.timer))
   }
@@ -604,6 +645,7 @@ export class SurvivorGame {
           ? new THREE.Vector2(this.move.x + this.touchDir.x, this.move.y + this.touchDir.y).normalize()
           : new THREE.Vector2(0, -1)
         this.spawnBeam(dir, dmg, lvl)
+        this.events.onSfx('beam')
       } else {
         // 找最近敌人
         let best: Enemy | null = null
@@ -615,17 +657,21 @@ export class SurvivorGame {
         }
         if (best) {
           const dir = best.pos.clone().sub(this.playerPos).normalize()
-          const speed = wid === 'comet' ? 7 : 12
+          const isMissile = wid === 'missile'
+          const speed = wid === 'comet' ? 7 : isMissile ? 9 : 12
           const m = new THREE.Mesh(
-            new THREE.SphereGeometry(wid === 'comet' ? 0.35 : 0.2, 8, 8),
+            new THREE.SphereGeometry(wid === 'comet' ? 0.35 : isMissile ? 0.3 : 0.2, 8, 8),
             new THREE.MeshBasicMaterial({ color: def.color }),
           )
+          if (isMissile) m.scale.set(1.1, 1.1, 1.5)
           m.position.set(this.playerPos.x, 0.6, this.playerPos.y)
           this.group.add(m)
           this.projectiles.push({
             mesh: m, pos: this.playerPos.clone(), vel: dir.multiplyScalar(speed),
-            damage: dmg, life: 2, kind: 'star', dead: false,
+            damage: dmg, life: isMissile ? 3 : 2, kind: 'star',
+            tracking: def.tracking === true, dead: false,
           })
+          this.events.onSfx('fire')
         }
       }
     }
@@ -668,6 +714,9 @@ export class SurvivorGame {
       this.spawnPickup(en.pos, 'xp', en.xp)
       // 偶尔掉金币
       if (Math.random() < 0.08) this.spawnPickup(en.pos, 'coin', 1)
+      this.events.onSfx('boom')
+    } else {
+      this.events.onSfx('hit')
     }
   }
 
@@ -687,6 +736,7 @@ export class SurvivorGame {
   private damagePlayer(dmg: number) {
     if (this.gameOver) return
     this.hp -= dmg
+    this.events.onSfx('hurt')
     this.events.onHp(Math.max(0, Math.round(this.hp)), this.maxHp)
     if (this.hp <= 0) {
       this.gameOver = true

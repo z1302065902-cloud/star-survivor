@@ -105,6 +105,9 @@ body {
 #redeem-msg { display: block; min-height: 18px; font-size: 12px; color: #9A8A70; margin-top: 6px; }
 #redeem-msg.ok { color: #4F9A3A; }
 #redeem-msg.err { color: #D06040; }
+#paywall-redeem-msg { display: block; min-height: 18px; font-size: 12px; color: #9A8A70; margin-top: 6px; }
+#paywall-redeem-msg.ok { color: #4F9A3A; }
+#paywall-redeem-msg.err { color: #D06040; }
 .menu-foot { font-size: 12px; color: #9A8A70; margin-top: 8px; }
 
 /* 结算 */
@@ -112,3 +115,18 @@ body {
 .end-stats { font-size: 15px; color: #5A4A3A; margin-bottom: 6px; }
 .end-coins { font-size: 18px; color: #E8794F; font-weight: 800; margin-bottom: 8px; }
 .end-hint { font-size: 12px; color: #4F9A3A; }
+
+/* ===== 商业化收尾 ===== */
+/* 付费墙 */
+.paywall-text { color: #5A4A3A; font-size: 14px; line-height: 1.7; margin-bottom: 14px; }
+.paywall-text b { color: #E8794F; }
+/* 武器收藏 */
+#weapon-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+.weapon-row { display: flex; align-items: center; gap: 10px; padding: 7px 12px; background: #FFFDF4; border: 2px solid #E8D8A8; border-radius: 12px; text-align: left; }
+.weapon-row.locked { opacity: 0.6; }
+.weapon-icon { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+.weapon-name { font-weight: 700; color: #5A4A3A; font-size: 13px; flex-shrink: 0; }
+.weapon-desc { font-size: 11px; color: #9A8A70; margin-left: 8px; flex: 1; }
+.weapon-state { font-size: 11px; color: #4F9A3A; font-weight: 700; flex-shrink: 0; }
+.weapon-unlock { padding: 5px 10px; background: #E8794F; color: #fff; border: none; border-radius: 8px; font-size: 11px; font-weight: 700; cursor: pointer; flex-shrink: 0; }
+.hud-coin b { color: #F0B83A; }

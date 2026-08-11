@@ -1,12 +1,12 @@
 import './style.css'
-import { CHARS, TRIAL_MINUTES, FULL_MINUTES, type UpgradeOption } from './game/data'
+import { CHARS, WEAPONS, TRIAL_MINUTES, FULL_MINUTES, type UpgradeOption } from './game/data'
 import { SurvivorGame } from './game/engine'
 import {
-  isFullVersion, getMeta, isCharUnlocked,
-  unlockChar, recordRun, addCoins,
+  isFullVersion, getMeta, isCharUnlocked, isWeaponUnlocked,
+  unlockChar, unlockWeapon, recordRun,
 } from './game/paid'
-import { bindRedeem } from './game/redeem'
-import { initMusic, resumeMusic, setMusicOn, isMusicOn } from './game/audio'
+import { bindRedeem, setupRedeem } from './game/redeem'
+import { initMusic, resumeMusic, setMusicOn, isMusicOn, playSfx, ensureSfxCtx } from './game/audio'
 
 let game: SurvivorGame | null = null
 let currentChar = CHARS[0]
@@ -51,12 +51,35 @@ function buildMenu() {
     }
     list.appendChild(row)
   })
+
+  // 武器收藏（局内随机获得，试玩版需解锁）
+  const wl = $('weapon-list')
+  wl.innerHTML = ''
+  Object.values(WEAPONS).forEach((w) => {
+    const unlocked = isWeaponUnlocked(w.id)
+    const row = document.createElement('div')
+    row.className = 'weapon-row' + (unlocked ? '' : ' locked')
+    row.innerHTML = `
+      <div class="weapon-icon" style="background:#${w.color.toString(16).padStart(6, '0')}"></div>
+      <div class="weapon-name">${w.name} ${unlocked ? '' : '🔒'}</div>
+      <div class="weapon-desc">${w.desc}</div>
+      ${unlocked ? '<span class="weapon-state">✓ 已解锁</span>' : '<button class="weapon-unlock">解锁◈50</button>'}
+    `
+    if (!unlocked) {
+      row.querySelector('.weapon-unlock')!.addEventListener('click', (e) => {
+        e.stopPropagation()
+        if (unlockWeapon(w.id)) buildMenu()
+      })
+    }
+    wl.appendChild(row)
+  })
 }
 
 // ===== 开始 =====
 function startGame() {
   $('menu-screen').classList.add('hidden')
   $('end-screen').classList.add('hidden')
+  $('paywall-screen').classList.add('hidden')
   if (game) { game.destroy(); game = null }
   currentIsFull = isFullVersion()
 
@@ -75,14 +98,19 @@ function startGame() {
       const mm = Math.floor(sec / 60)
       const ss = sec % 60
       $('timer-text').textContent = `${mm}:${String(ss).padStart(2, '0')}`
+      $('kills-num').textContent = String(game?.kills ?? 0)
     },
     onGameOver: (sec, kills, won) => endGame(sec, kills, won),
-    onCoins: () => {},
+    onCoins: (coins) => { $('hud-coin-live').textContent = String(coins) },
+    onTrialEnd: () => showPaywall(),
+    onSfx: (kind) => playSfx(kind),
   })
   ;(window as any).__game = game
   $('hp-text').textContent = `${currentChar.hp}/${currentChar.hp}`
   $('level-num').textContent = '1'
   $('timer-text').textContent = `0:00`
+  $('kills-num').textContent = '0'
+  $('hud-coin-live').textContent = '0'
 }
 
 function showLevelUp(opts: UpgradeOption[]) {
@@ -107,16 +135,24 @@ function showLevelUp(opts: UpgradeOption[]) {
 }
 
 function endGame(sec: number, kills: number, won: boolean) {
-  const coinsEarned = Math.floor(sec / 10) + kills * 2
-  addCoins(coinsEarned)
+  // 结算金币 = 存活奖励 + 击杀奖励 + 局内拾取
+  // （recordRun 内部已把 coins 写入 meta，切勿再 addCoins，否则双倍）
+  const inRunCoins = game?.coins ?? 0
+  const coinsEarned = Math.floor(sec / 10) + kills * 2 + inRunCoins
   recordRun(sec, coinsEarned)
   $('end-title').textContent = won ? '🏆 幸存！' : '☠️ 星舰坠落'
   $('end-info').innerHTML = `
     <div class="end-stats">存活 ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')} · 击毁 ${kills}</div>
-    <div class="end-coins">◈ 获得 ${coinsEarned}</div>
+    <div class="end-coins">◈ 获得 ${coinsEarned}${inRunCoins ? `（含局内拾取 ${inRunCoins}）` : ''}</div>
     ${won ? '' : '<div class="end-hint">差一点！再来一局攒金币变强</div>'}
   `
   $('end-screen').classList.remove('hidden')
+}
+
+// 试玩超时 → 付费墙
+function showPaywall() {
+  $('end-screen').classList.add('hidden')
+  $('paywall-screen').classList.remove('hidden')
 }
 
 // ===== 绑定 =====
@@ -133,15 +169,47 @@ function bindUI() {
     $('menu-screen').classList.remove('hidden')
     buildMenu()
   })
+  $('btn-paywall-menu').addEventListener('click', () => {
+    if (game) { game.destroy(); game = null }
+    $('paywall-screen').classList.add('hidden')
+    $('menu-screen').classList.remove('hidden')
+    buildMenu()
+  })
+  // 付费墙内兑换：成功 → 立即以完整版开新局
+  setupRedeem('paywall-redeem-input', 'paywall-redeem-btn', 'paywall-redeem-msg', () => {
+    $('paywall-screen').classList.add('hidden')
+    startGame()
+  })
 
-  // 移动控制（WASD + 方向键 + 触屏）
-  window.addEventListener('keydown', (e) => {
+  // 移动控制（WASD + 方向键 + 触屏）——按住移动、松开停止，多键不冲突
+  const moveKeys = { w: false, s: false, a: false, d: false }
+  const syncMove = () => {
     if (!game) return
+    let x = 0
+    let y = 0
+    if (moveKeys.w) y -= 1
+    if (moveKeys.s) y += 1
+    if (moveKeys.a) x -= 1
+    if (moveKeys.d) x += 1
+    game.setMove(x, y)
+  }
+  window.addEventListener('keydown', (e) => {
     const k = e.key.toLowerCase()
-    if (k === 'w' || k === 'arrowup') game.setMove(0, -1)
-    if (k === 's' || k === 'arrowdown') game.setMove(0, 1)
-    if (k === 'a' || k === 'arrowleft') game.setMove(-1, 0)
-    if (k === 'd' || k === 'arrowright') game.setMove(1, 0)
+    if (k === 'w' || k === 'arrowup') moveKeys.w = true
+    else if (k === 's' || k === 'arrowdown') moveKeys.s = true
+    else if (k === 'a' || k === 'arrowleft') moveKeys.a = true
+    else if (k === 'd' || k === 'arrowright') moveKeys.d = true
+    else return
+    syncMove()
+  })
+  window.addEventListener('keyup', (e) => {
+    const k = e.key.toLowerCase()
+    if (k === 'w' || k === 'arrowup') moveKeys.w = false
+    else if (k === 's' || k === 'arrowdown') moveKeys.s = false
+    else if (k === 'a' || k === 'arrowleft') moveKeys.a = false
+    else if (k === 'd' || k === 'arrowright') moveKeys.d = false
+    else return
+    syncMove()
   })
 
   bindRedeem(() => buildMenu())
@@ -150,5 +218,17 @@ function bindUI() {
 initMusic()
 bindUI()
 buildMenu()
-// 首次点击时解锁音频（浏览器策略）
-window.addEventListener('pointerdown', resumeMusic, { once: true })
+// 首次点击时解锁音频 + 音效（浏览器策略）
+window.addEventListener('pointerdown', () => {
+  resumeMusic()
+  ensureSfxCtx()
+}, { once: true })
+
+// 全局错误兜底：不白屏
+window.addEventListener('error', (e) => {
+  const el = document.createElement('div')
+  el.style.cssText = 'position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#D06040;color:#fff;padding:10px 16px;border-radius:12px;z-index:999;font-size:13px;box-shadow:0 4px 12px rgba(0,0,0,0.3);'
+  el.textContent = `出错了：${e.message || '未知错误'} · 请刷新重试`
+  document.body.appendChild(el)
+  setTimeout(() => el.remove(), 6000)
+})

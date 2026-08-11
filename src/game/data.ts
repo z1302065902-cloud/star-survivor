@@ -1,7 +1,7 @@
 // 星际幸存者 · 游戏数据定义
 
 // ===== 武器 =====
-export type WeaponId = 'star_shot' | 'orbit' | 'nova' | 'beam' | 'comet' | 'aura'
+export type WeaponId = 'star_shot' | 'orbit' | 'nova' | 'beam' | 'comet' | 'aura' | 'missile'
 
 export interface WeaponDef {
   id: WeaponId
@@ -14,6 +14,8 @@ export interface WeaponDef {
   color: number
   /** 特殊行为标记 */
   kind: 'projectile' | 'orbit' | 'aura' | 'beam'
+  /** 是否发射后持续追踪最近敌人 */
+  tracking?: boolean
   /** 满级+被动 → 进化的武器描述（提升） */
   evolveName?: string
 }
@@ -25,6 +27,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   beam: { id: 'beam', name: '光之刃', desc: '朝移动方向发射光束', maxLevel: 5, cooldown: 1.2, damage: 12, color: 0x4fd1ff, kind: 'beam' },
   comet: { id: 'comet', name: '彗星', desc: '召唤彗星轰击最近敌人', maxLevel: 5, cooldown: 1.6, damage: 18, color: 0xff8a3d, kind: 'projectile', evolveName: '流星雨' },
   aura: { id: 'aura', name: '星云护体', desc: '周围敌人持续受到伤害', maxLevel: 5, cooldown: 0.3, damage: 3, color: 0x7ae0ff, kind: 'aura' },
+  missile: { id: 'missile', name: '制导飞弹', desc: '发射追踪飞弹，自动锁定最近敌人', maxLevel: 5, cooldown: 1.1, damage: 14, color: 0x66ff88, kind: 'projectile', evolveName: '蜂群制导', tracking: true },
 }
 
 // ===== 被动 =====

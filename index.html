@@ -18,6 +18,7 @@
           <span class="hud-timer">⏱ <b id="timer-text">0:00</b></span>
         </div>
         <div class="hud-right">
+          <span class="hud-coin">◈ <b id="hud-coin-live">0</b></span>
           <span class="hud-kills">💥 <b id="kills-num">0</b></span>
         </div>
       </div>
@@ -45,9 +46,11 @@
           </div>
           <h3 class="menu-label">选择角色</h3>
           <div id="char-list"></div>
+          <h3 class="menu-label">武器收藏（局内随机获得）</h3>
+          <div id="weapon-list"></div>
           <button id="btn-start" class="menu-btn">⚔️ 开始战斗</button>
           <div class="menu-redeem">
-            <input id="redeem-input" placeholder="输入激活码 或 爱发电订单号" />
+            <input id="redeem-input" placeholder="输入爱发电订单号解锁" />
             <button id="redeem-btn">兑换</button>
             <span id="redeem-msg"></span>
           </div>
@@ -62,6 +65,20 @@
           <p id="end-info"></p>
           <button id="btn-retry" class="menu-btn">再来一局</button>
           <button id="btn-menu" class="menu-btn ghost">返回菜单</button>
+        </div>
+      </div>
+
+      <!-- 付费墙（试玩超时） -->
+      <div id="paywall-screen" class="screen hidden">
+        <div class="menu-card">
+          <h2>⏰ 试玩结束</h2>
+          <p class="paywall-text">免费试玩 <b>3</b> 分钟已结束。<br/>解锁完整版，畅玩 <b>10</b> 分钟终极挑战 + 全部武器与角色！</p>
+          <div class="menu-redeem">
+            <input id="paywall-redeem-input" placeholder="输入爱发电订单号解锁" />
+            <button id="paywall-redeem-btn">兑换</button>
+          </div>
+          <span id="paywall-redeem-msg"></span>
+          <button id="btn-paywall-menu" class="menu-btn ghost">返回菜单</button>
         </div>
       </div>
     </div>
