@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>星际幸存者 · 自动攻击肉鸽生存</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🪐</text></svg>" />
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="game-canvas"></canvas>
+
+      <!-- HUD -->
+      <div id="hud">
+        <div class="hud-left">
+          <span class="hud-title">星际幸存者</span>
+          <span class="hud-level">Lv.<b id="level-num">1</b></span>
+          <span class="hud-timer">⏱ <b id="timer-text">0:00</b></span>
+        </div>
+        <div class="hud-right">
+          <span class="hud-kills">💥 <b id="kills-num">0</b></span>
+        </div>
+      </div>
+      <!-- 血条 + 经验条 -->
+      <div id="bars">
+        <div class="bar hp-bar"><div id="hp-fill" class="fill hp"></div><span id="hp-text"></span></div>
+        <div class="bar xp-bar"><div id="xp-fill" class="fill xp"></div></div>
+      </div>
+
+      <!-- 升级弹窗 -->
+      <div id="levelup-panel" class="hidden">
+        <div class="levelup-title">✨ 升级！选择进化</div>
+        <div id="levelup-options"></div>
+      </div>
+
+      <!-- 主菜单 -->
+      <div id="menu-screen" class="screen">
+        <div class="menu-card">
+          <h1>🪐 星际幸存者</h1>
+          <p class="menu-sub">自动攻击 · 无尽敌潮 · 升级进化</p>
+          <div class="menu-top">
+            <span class="meta-chip">◈ 金币 <b id="hud-coins">0</b></span>
+            <span class="meta-chip">🏆 最佳 <b id="hud-besttime">0:00</b></span>
+            <button id="btn-music" class="meta-chip music-chip">🎵 音乐：开</button>
+          </div>
+          <h3 class="menu-label">选择角色</h3>
+          <div id="char-list"></div>
+          <button id="btn-start" class="menu-btn">⚔️ 开始战斗</button>
+          <div class="menu-redeem">
+            <input id="redeem-input" placeholder="输入激活码 或 爱发电订单号" />
+            <button id="redeem-btn">兑换</button>
+            <span id="redeem-msg"></span>
+          </div>
+          <p class="menu-foot" id="menu-full-text"></p>
+        </div>
+      </div>
+
+      <!-- 结算 -->
+      <div id="end-screen" class="screen hidden">
+        <div class="menu-card">
+          <h2 id="end-title">星舰坠落</h2>
+          <p id="end-info"></p>
+          <button id="btn-retry" class="menu-btn">再来一局</button>
+          <button id="btn-menu" class="menu-btn ghost">返回菜单</button>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
