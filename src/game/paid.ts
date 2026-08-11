@@ -7,6 +7,8 @@ export const AFDIAN_VERIFY_URL: string =
   '/api/afdian-verify'
 
 export function isFullVersion(): boolean {
+  // itch.io 等平台构建时注入 VITE_FULL_VERSION=1 → 直接完整版，无付费墙
+  if ((import.meta as any).env?.VITE_FULL_VERSION === '1') return true
   try {
     return localStorage.getItem('ss-paid-v1') === '1'
   } catch {
