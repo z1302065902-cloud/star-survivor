@@ -1,0 +1,114 @@
+:root {
+  color-scheme: light;
+  /* 吉卜力童话调色板（延续塔防） */
+  --bg: #C5E8F8;
+  --panel: #FFF8EC;
+  --panel-border: #E8D8A8;
+  --accent: #E8794F;
+  --text: #5A4A3A;
+  --dim: #9A8A70;
+  --gold: #F0B83A;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 100%; height: 100%; overflow: hidden; background: #1a1030; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: #e8edff;
+  user-select: none; -webkit-user-select: none;
+}
+#app { position: relative; width: 100%; height: 100%; }
+#game-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.hidden { display: none !important; }
+
+/* HUD */
+#hud {
+  position: absolute; top: 10px; left: 10px; right: 10px;
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 14px; background: rgba(255,248,236,0.9);
+  border: 2px solid #E8D8A8; border-radius: 16px; z-index: 10;
+  pointer-events: none;
+}
+.hud-left, .hud-right { display: flex; align-items: center; gap: 14px; font-size: 15px; }
+.hud-title { font-weight: 800; color: #E8794F; letter-spacing: 1px; }
+.hud-level b, .hud-timer b { color: #5A4A3A; }
+.hud-kills b { color: #E8794F; }
+
+/* 血条经验条 */
+#bars { position: absolute; top: 62px; left: 10px; right: 10px; z-index: 10; pointer-events: none; }
+.bar { height: 12px; border-radius: 8px; overflow: hidden; position: relative; background: rgba(0,0,0,0.25); }
+.hp-bar { margin-bottom: 4px; }
+.fill { height: 100%; transition: width 0.15s; }
+.fill.hp { background: linear-gradient(90deg, #ff6f61, #ff9d8a); }
+.fill.xp { background: linear-gradient(90deg, #4fd1ff, #9f7cff); }
+#hp-text { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 9px; color: #fff; font-weight: 700; }
+
+/* 升级弹窗 */
+#levelup-panel {
+  position: absolute; left: 50%; top: 35%; transform: translateX(-50%);
+  width: min(420px, 92vw); background: #FFF8EC; border: 3px solid #E8794F;
+  border-radius: 20px; padding: 20px; z-index: 30; box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+}
+.levelup-title { text-align: center; font-weight: 800; font-size: 18px; color: #E8794F; margin-bottom: 14px; }
+#levelup-options { display: flex; flex-direction: column; gap: 10px; }
+.levelup-opt {
+  padding: 12px 14px; background: #FFFDF4; border: 3px solid #E8D8A8; border-radius: 14px;
+  cursor: pointer; transition: all 0.15s; text-align: center;
+}
+.levelup-opt:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+.opt-name { font-weight: 700; font-size: 15px; color: #5A4A3A; }
+.opt-desc { font-size: 12px; color: #9A8A70; margin-top: 4px; }
+
+/* 屏幕 */
+.screen {
+  position: absolute; inset: 0; z-index: 20;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(180deg, #A5D8F0, #C5E8F8 45%, #FDEBD0);
+}
+.menu-card {
+  width: min(420px, 92vw); padding: 26px 24px; background: rgba(255,248,236,0.94);
+  border: 3px solid #E8D8A8; border-radius: 24px; text-align: center;
+  box-shadow: 0 10px 40px rgba(90,70,40,0.25); max-height: 90vh; overflow-y: auto;
+}
+.menu-card h1 { font-size: 30px; color: #E8794F; margin-bottom: 4px; }
+.menu-card h2 { font-size: 26px; color: #E8794F; margin-bottom: 10px; }
+.menu-sub { color: #8A7A5A; font-size: 14px; margin-bottom: 16px; }
+.menu-top { display: flex; justify-content: center; gap: 12px; margin-bottom: 16px; }
+.meta-chip { background: rgba(255,255,255,0.7); border: 2px solid #E8D8A8; border-radius: 20px; padding: 5px 14px; font-size: 13px; color: #5A4A3A; font-weight: 600; }
+.meta-chip b { color: #E8794F; }
+.music-chip { border: none; cursor: pointer; background: rgba(232,121,79,0.15); color: #E8794F; font-weight: 700; }
+.menu-label { color: #8A7A5A; font-size: 13px; margin: 8px 0; }
+
+/* 角色 */
+#char-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.char-row {
+  display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+  background: #FFFDF4; border: 2px solid #E8D8A8; border-radius: 14px; cursor: pointer; text-align: left;
+}
+.char-row.selected { border-color: #E8794F; background: rgba(232,121,79,0.08); }
+.char-row.locked { opacity: 0.6; }
+.char-avatar { width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0; }
+.char-name { font-weight: 700; color: #5A4A3A; font-size: 14px; }
+.char-desc { font-size: 11px; color: #9A8A70; }
+.char-passive { font-size: 11px; color: #E8794F; margin-top: 2px; }
+.char-unlock { margin-left: auto; padding: 6px 10px; background: #E8794F; color: #fff; border: none; border-radius: 10px; font-size: 11px; font-weight: 700; cursor: pointer; flex-shrink: 0; }
+
+.menu-btn {
+  width: 100%; padding: 12px 0; background: #E8794F; color: #fff; border: 2px solid #D95E38;
+  border-radius: 14px; font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.15s;
+}
+.menu-btn:hover { filter: brightness(1.1); }
+.menu-btn.ghost { background: #FFF8EC; color: #E8794F; border-color: #E8D8A8; margin-top: 8px; }
+.menu-redeem { display: flex; gap: 6px; margin: 12px 0 8px; }
+.menu-redeem input { flex: 1; padding: 9px 12px; background: #FFFDF4; color: #5A4A3A; border: 2px solid #E8D8A8; border-radius: 12px; font-size: 13px; outline: none; }
+.menu-redeem input:focus { border-color: #E8794F; }
+.menu-redeem button { padding: 9px 16px; background: #E8794F; color: #fff; border: none; border-radius: 12px; font-weight: 700; cursor: pointer; }
+#redeem-msg { display: block; min-height: 18px; font-size: 12px; color: #9A8A70; margin-top: 6px; }
+#redeem-msg.ok { color: #4F9A3A; }
+#redeem-msg.err { color: #D06040; }
+.menu-foot { font-size: 12px; color: #9A8A70; margin-top: 8px; }
+
+/* 结算 */
+#end-screen .menu-card p { color: #9A8A70; margin-bottom: 16px; }
+.end-stats { font-size: 15px; color: #5A4A3A; margin-bottom: 6px; }
+.end-coins { font-size: 18px; color: #E8794F; font-weight: 800; margin-bottom: 8px; }
+.end-hint { font-size: 12px; color: #4F9A3A; }
