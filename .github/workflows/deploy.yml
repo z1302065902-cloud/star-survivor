@@ -24,10 +24,16 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      # 爱发电订单自助解锁验证端点（Vercel）。该变量为 public，无敏感信息。
+      # 主站版：付费墙 + 爱发电验证（GitHub Pages 根）
       - run: npm run build
         env:
           VITE_AFDIAN_VERIFY_URL: https://star-survivor-mu.vercel.app/api/afdian-verify
+      # itch.io 版：完整版直开（VITE_FULL_VERSION=1），base 指向 /star-survivor/itch/
+      - run: npx vite build --base=/star-survivor/itch/ --outDir=dist-itch
+        env:
+          VITE_FULL_VERSION: '1'
+      # 合并 itch 版到 dist/itch/（主站 dist 为根，itch 为子目录）
+      - run: mkdir -p dist/itch && cp -r dist-itch/* dist/itch/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
