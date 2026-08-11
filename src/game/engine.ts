@@ -101,6 +101,7 @@ export class SurvivorGame {
   private weaponTimers = new Map<WeaponId, number>()
   private keyState = new Set<string>()
   private touchDir = new THREE.Vector2(0, 0)
+  private decor: THREE.Object3D[] = []
 
   constructor(canvas: HTMLCanvasElement, char: CharDef, isFull: boolean, events: GameEvents) {
     this.char = char
@@ -147,22 +148,88 @@ export class SurvivorGame {
   }
 
   private buildGround() {
-    const g = new THREE.PlaneGeometry(120, 120)
-    const mat = new THREE.MeshStandardMaterial({ color: 0x1a1030, roughness: 0.9 })
-    const ground = new THREE.Mesh(g, mat)
+    // 彩色星云地面（canvas 生成渐变 + 星点 + 网格线，俯视角可见）
+    const c = document.createElement('canvas')
+    c.width = 1024
+    c.height = 1024
+    const ctx = c.getContext('2d')!
+    const grad = ctx.createRadialGradient(512, 512, 100, 512, 512, 720)
+    grad.addColorStop(0, '#2a1a4a')
+    grad.addColorStop(0.5, '#1a1030')
+    grad.addColorStop(1, '#120a24')
+    ctx.fillStyle = grad
+    ctx.fillRect(0, 0, 1024, 1024)
+    // 星云色斑
+    const blobs: [number, number, string, number][] = [
+      [300, 300, '79,209,255', 0.10],
+      [700, 500, '159,124,255', 0.12],
+      [500, 750, '255,111,97', 0.08],
+      [200, 700, '127,191,96', 0.06],
+    ]
+    for (const [x, y, rgb, a] of blobs) {
+      const rg = ctx.createRadialGradient(x, y, 0, x, y, 200)
+      rg.addColorStop(0, `rgba(${rgb},${a})`)
+      rg.addColorStop(1, `rgba(${rgb},0)`)
+      ctx.fillStyle = rg
+      ctx.fillRect(x - 200, y - 200, 400, 400)
+    }
+    // 网格线（科幻地台感）
+    ctx.strokeStyle = 'rgba(79,209,255,0.05)'
+    ctx.lineWidth = 2
+    for (let i = 0; i <= 8; i++) {
+      const p = (i / 8) * 1024
+      ctx.beginPath(); ctx.moveTo(p, 0); ctx.lineTo(p, 1024); ctx.stroke()
+      ctx.beginPath(); ctx.moveTo(0, p); ctx.lineTo(1024, p); ctx.stroke()
+    }
+    // 星点
+    for (let i = 0; i < 200; i++) {
+      ctx.fillStyle = `rgba(255,255,255,${0.3 + Math.random() * 0.5})`
+      ctx.beginPath()
+      ctx.arc(Math.random() * 1024, Math.random() * 1024, 1 + Math.random() * 2, 0, Math.PI * 2)
+      ctx.fill()
+    }
+    const tex = new THREE.CanvasTexture(c)
+    tex.colorSpace = THREE.SRGBColorSpace
+    const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 })
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(120, 120), mat)
     ground.rotation.x = -Math.PI / 2
     ground.position.y = -0.5
     this.group.add(ground)
-    // 装饰星星点
-    const geo = new THREE.BufferGeometry()
-    const pts: number[] = []
-    for (let i = 0; i < 300; i++) {
-      pts.push((Math.random() - 0.5) * 100, 0, (Math.random() - 0.5) * 100)
+
+    // 立体装饰：漂浮的小行星 + 能量水晶，散布在战场周围
+    const decorGeoPool = [
+      new THREE.DodecahedronGeometry(0.4, 0),
+      new THREE.OctahedronGeometry(0.35, 0),
+      new THREE.IcosahedronGeometry(0.3, 0),
+    ]
+    const decorColors = [0x9f7cff, 0x4fd1ff, 0xffd166, 0x7ae0ff]
+    for (let i = 0; i < 40; i++) {
+      const geo = decorGeoPool[i % decorGeoPool.length]
+      const color = decorColors[i % decorColors.length]
+      const m = new THREE.Mesh(
+        geo,
+        new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.2, roughness: 0.6, metalness: 0.3 }),
+      )
+      const a = Math.random() * Math.PI * 2
+      const dist = 6 + Math.random() * 30
+      m.position.set(Math.cos(a) * dist, 0.3 + Math.random() * 1.5, Math.sin(a) * dist)
+      m.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI)
+      m.scale.setScalar(0.5 + Math.random())
+      this.group.add(m)
+      this.decor.push(m)
     }
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3))
-    const stars = new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.12, transparent: true, opacity: 0.5 }))
-    stars.position.y = -0.4
-    this.group.add(stars)
+    // 发光能量柱（点缀）
+    for (let i = 0; i < 8; i++) {
+      const a = Math.random() * Math.PI * 2
+      const dist = 8 + Math.random() * 22
+      const pillar = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.15, 0.2, 2, 8),
+        new THREE.MeshStandardMaterial({ color: 0x4fd1ff, emissive: 0x4fd1ff, emissiveIntensity: 0.5, transparent: true, opacity: 0.7 }),
+      )
+      pillar.position.set(Math.cos(a) * dist, 1, Math.sin(a) * dist)
+      this.group.add(pillar)
+      this.decor.push(pillar)
+    }
   }
 
   private buildPlayer(color: number): THREE.Object3D {
@@ -364,6 +431,15 @@ export class SurvivorGame {
   private update(dt: number) {
     this.elapsed += dt
     this.timer += dt
+
+    // 环境装饰动画：缓慢旋转 + 上下漂浮（立体动感）
+    for (let i = 0; i < this.decor.length; i++) {
+      const d = this.decor[i]
+      d.rotation.y += dt * 0.2
+      d.rotation.x += dt * 0.1
+      const base = i % 2 === 0 ? 0.3 : 1
+      d.position.y = base + Math.sin(this.elapsed * 0.5 + i) * 0.3
+    }
 
     // 玩家移动
     let mx = this.move.x + this.touchDir.x
