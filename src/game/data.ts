@@ -92,7 +92,7 @@ export interface MetaSave {
 
 export const META_KEY = 'ss-meta-v1'
 
-export const TRIAL_MINUTES = 3 // 免费试玩 3 分钟
+export const TRIAL_MINUTES = 1 // 免费试玩 1 分钟
 export const FULL_MINUTES = 10 // 完整版目标 10 分钟
 
 // ===== 角色 =====
